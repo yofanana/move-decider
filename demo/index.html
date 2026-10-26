@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Move Decider · 日本移动决策引擎（Demo v2）</title>
+<style>
+  body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;margin:0;background:#f6f7f9;color:#1c2430}
+  .wrap{max-width:920px;margin:0 auto;padding:20px 16px 48px}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:#5b6774;font-size:13px;margin-bottom:16px;line-height:1.7}
+  .card{background:#fff;border:1px solid #e2e6ec;border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  label{font-size:13px;color:#41505f}
+  input[type=range]{width:200px;vertical-align:middle}
+  .val{font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 6px;border-bottom:1px solid #edf0f3;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;white-space:normal}
+  tr.rec{background:#eef7ee}
+  .risk{font-size:12px;padding:2px 8px;border-radius:99px}
+  .green{background:#dff2df}.yellow{background:#fdf0cd}.red{background:#fbdcdc}
+  .star{color:#1a7f37;font-weight:700}
+  .headline{font-size:16px;font-weight:700;margin:0 0 6px}
+  .small{font-size:12.5px;color:#5b6774;line-height:1.7}
+  h3{font-size:14px;margin:12px 0 6px}
+  ul{margin:6px 0;padding-left:18px}
+  li{font-size:13px;line-height:1.7;color:#33404d}
+  .flip{color:#b3540e;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Move Decider · 日本移动决策引擎</h1>
+  <div class="sub">为住在地方、自费移动的人算总账：现金 ＋ 时间×你的单价 ＋ 舒适/便利/风险 − 开车的享受值。<br>
+  理论：一般化费用 × 随机效用（McFadden）× 旅行的正效用（Mokhtarian &amp; Salomon）。价格 verified＝真实账单，estimate＝待复核估算（见各案例未知项）。解释层为 MOCK，接 Nemotron 后文本替换、数字不变。</div>
+
+  <div class="card">
+    <div class="row">
+      <label>案例：
+        <select id="caseSel">
+          <option value="tokyo" selected>汤泽⇄东京 · 11月出社周（5晚）</option>
+          <option value="snow">汤泽⇄东京 · 雪季变体（1月）</option>
+          <option value="maebashi">汤泽⇄前桥 · 考试当天往返（11/15）</option>
+        </select></label>
+      <label>优先级：
+        <select id="prio">
+          <option value="balanced" selected>综合（现金＋时间）</option>
+          <option value="money">最省钱</option>
+        </select></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>我的时间单价：<span class="val" id="tvVal">¥3,000</span>/小时
+        <input type="range" id="tv" min="0" max="5000" step="100" value="3000"></label>
+      <label>开车的享受值：<span class="val" id="ejVal">¥0</span>/趟
+        <input type="range" id="ej" min="0" max="15000" step="250" value="0"></label>
+    </div>
+    <div class="small" style="margin-top:6px">时间口径（本人档案）：驾驶小时听播客按半价计、休息与乘车按全价计；自宅到越后汤泽站单程 25 分钟已计入坐车方案。享受值只抵扣全程自驾的策略——拖动它，看推荐什么时候翻转。</div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>策略</th><th>现金</th><th>门到门</th><th>时间成本</th><th>享受值</th><th>有效总成本</th><th>舒适</th><th>便利</th><th>风险</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <p class="headline" id="headline"></p>
+    <div class="small" id="sens"></div>
+    <h3>未知项（不编造，明示）</h3>
+    <ul id="unknowns"></ul>
+  </div>
+
+  <div class="small">引擎：确定性算账（价格＋来源＋日期＋置信度）→ 风险规则 → 解释层（本页为 MOCK）。引擎/数据包分离：换走廊只换数据包，引擎不动——飞机与海外是加包，不是重写。</div>
+</div>
+<script>
+const COEF = {drive:0.5, rest:1.0, ride:1.0};
+const ACC = 25/60; // 自宅→越后汤泽站 单程驾驶（小时）
+const CASES = {
+tokyo: {
+  season:"autumn",
+  strategies:[
+   {id:"S1",name:"全程自驾＋高速",money:4330+11000+3335+13990,seg:{drive:3.8,rest:0.8,ride:0},enjoy:true,comfort:"中",conv:"高",blurb:"钱花在通行费上"},
+   {id:"S2",name:"全程自驾＋国道",money:5300+3335+13990,seg:{drive:5.5,rest:1.5,ride:0},enjoy:true,comfort:"中",conv:"高",blurb:"本案例的实际选择"},
+   {id:"S3",name:"新干线直达",money:6470*2+13990,seg:{drive:ACC,rest:0,ride:1.7},enjoy:false,comfort:"高",conv:"中",blurb:"车停汤泽站（11月免费期¥0）"},
+   {id:"S4",name:"自驾到高崎换新干线",money:1000*2+500*6+4900*2+13990,seg:{drive:1.7,rest:0,ride:1.2},enjoy:false,comfort:"中高",conv:"中高",blurb:"只开前段山路，返程有车"},
+   {id:"S5",name:"国道自驾＋车中泊（3晚酒店）",money:5300+3335+Math.round(13990/5*3),seg:{drive:5.5,rest:1.5,ride:0},enjoy:true,comfort:"低",conv:"高",blurb:"现金最低，2晚睡车里"},
+   {id:"S6",name:"高速巴士往返",money:3800*2+13990,seg:{drive:ACC,rest:0,ride:3.8},enjoy:false,comfort:"中",conv:"中低",blurb:"班次少、时刻绑死"}
+  ],
+  risk:{S1:"yellow",S2:"yellow",S3:"green",S4:"yellow",S5:"yellow",S6:"yellow"},
+  unknowns:["高速通行费 ¥11,000 为估算带（¥10,000–12,000），未计 ETC 深夜/休日割引——深夜3割满足时 S1 可再降约 ¥3,000 量级。",
+            "新干线票价为通常期公开口径，未计えきねっとトクだ値（有货时 S3/S4 更便宜）。",
+            "高崎停车 ¥500/天为量级估算；横滨合法车中泊点未核实（影响 S5）。",
+            "行李宅配（约 ¥4,500 往返）为可选附加项，未计入 S3/S6。市内交通与餐饮未计入（各策略近似相同）。"],
+  userPick:"S2"
+},
+snow: null, // 运行时由 tokyo 派生（季节=winter，风险翻转）
+maebashi: {
+  season:"autumn",
+  strategies:[
+   {id:"M1",name:"全程自驾＋高速（关越道）",money:2270+4000+1000,seg:{drive:1.6,rest:0,ride:0},enjoy:true,comfort:"中",conv:"高",blurb:"门到门最可控，不依赖班次"},
+   {id:"M2",name:"全程自驾＋国道17号（三国峠）",money:2360+1000,seg:{drive:2.6,rest:0.2,ride:0},enjoy:true,comfort:"中低",conv:"高",blurb:"现金最低，但11月中旬峠有初雪/冻结风险"},
+   {id:"M3",name:"新干线＋两毛线",money:3500*2+240*2,seg:{drive:ACC,rest:0,ride:1.2},enjoy:false,comfort:"高",conv:"中",blurb:"精力留给考试；前桥站到考场另计"},
+   {id:"M4",name:"自驾到高崎＋两毛线",money:1000*2+500+240*2,seg:{drive:1.7,rest:0,ride:0.5},enjoy:false,comfort:"中高",conv:"中高",blurb:"山路自己开、平原段坐车"}
+  ],
+  risk:{M1:"green",M2:"yellow",M3:"green",M4:"yellow"},
+  unknowns:["前桥包价格全部为 estimate：考场（2026-11-15 赁贷资格检定）确定后逐项复核。",
+            "前桥站/考场周边接驳与停车未核实；三国峠当日路况出发前查官方道路信息。"],
+  userPick:null
+}};
+CASES.snow = JSON.parse(JSON.stringify(CASES.tokyo));
+CASES.snow.season = "winter";
+CASES.snow.risk = {S1:"yellow",S2:"red",S3:"green",S4:"yellow",S5:"red",S6:"yellow"};
+CASES.snow.unknowns = ["雪季：国道自驾（S2）与车中泊（S5）因三国峠积雪＋疲劳被判否决级风险，不进入推荐池。"].concat(CASES.tokyo.unknowns);
+
+const fmt = n => "¥" + Math.round(n).toLocaleString("ja-JP");
+function render(){
+  const c = CASES[document.getElementById("caseSel").value];
+  const tv = +document.getElementById("tv").value;
+  const ej = +document.getElementById("ej").value;
+  const prio = document.getElementById("prio").value;
+  document.getElementById("tvVal").textContent = fmt(tv);
+  document.getElementById("ejVal").textContent = fmt(ej);
+  const rows = c.strategies.map(s=>{
+    const rt = {drive:s.seg.drive*2, rest:s.seg.rest*2, ride:s.seg.ride*2};
+    const elapsed = rt.drive+rt.rest+rt.ride;
+    const equiv = rt.drive*COEF.drive + rt.rest*COEF.rest + rt.ride*COEF.ride;
+    const tc = equiv*tv;
+    const credit = s.enjoy ? ej : 0;
+    return {...s, elapsed, tc, credit, eff: s.money+tc-credit, risk: c.risk[s.id]};
+  });
+  const pool = rows.filter(r=>r.risk!=="red");
+  const rec = prio==="money" ? pool.reduce((a,b)=>a.money<b.money?a:b) : pool.reduce((a,b)=>a.eff<b.eff?a:b);
+  document.getElementById("tbody").innerHTML = rows.map(r=>
+    `<tr class="${r.id===rec.id?"rec":""}"><td>${r.id} ${r.name} ${r.id===rec.id?'<span class="star">★推荐</span>':""}<br><span class="small">${r.blurb}</span></td>`+
+    `<td>${fmt(r.money)}</td><td>${r.elapsed.toFixed(1)}h</td><td>${fmt(r.tc)}</td><td>${r.credit?"-"+fmt(r.credit):"—"}</td>`+
+    `<td><b>${fmt(r.eff)}</b></td><td>${r.comfort}</td><td>${r.conv}</td>`+
+    `<td><span class="risk ${r.risk}">${r.risk}</span></td></tr>`).join("");
+  document.getElementById("headline").textContent =
+    `推荐 ${rec.id} ${rec.name}：现金 ${fmt(rec.money)}、门到门往返 ${rec.elapsed.toFixed(1)} 小时、有效总成本 ${fmt(rec.eff)}。`;
+  let sens = "";
+  if(c.userPick){
+    const pick = rows.find(r=>r.id===c.userPick);
+    const pickNoEnjoy = pick.money + pick.tc;
+    const gap = pickNoEnjoy - rec.eff - (rec.credit||0);
+    if(rec.id===c.userPick){
+      sens = `<span class="flip">推荐已翻转到你实际的选择 ${pick.id}</span>：在当前享受值下，开车在你自己的账上获胜——模型同意。`;
+    } else {
+      sens = `你实际选的 ${pick.id} 与推荐的差距是 ${fmt(pickNoEnjoy - (rec.money+rec.tc-rec.credit))}：把「开车的享受值」拖过这个数，推荐就会翻转到 ${pick.id}——模型不反对你开车，它只是替这份喜欢标了价。`;
+    }
+    const s1 = rows[0], s2 = rows[1];
+    const be = Math.round((s1.money - s2.money) / ((s2.tc - s1.tc) / (tv||1)));
+    if(tv>0) sens += `<br>只比 S1 与 S2：时间单价高于 ${fmt(be)}/小时 时高速更划算——临界点几乎贴着你 ¥3,000 的筛选线。`;
+  } else {
+    sens = "前桥包：四种走法的现金差很小，胜负在时间与考试日的风险——M2 的现金最低，但考试日不容有失，风险列就是它的代价。";
+  }
+  document.getElementById("sens").innerHTML = sens;
+  document.getElementById("unknowns").innerHTML = c.unknowns.map(u=>`<li>${u}</li>`).join("");
+}
+["caseSel","tv","ej","prio"].forEach(id=>document.getElementById(id).addEventListener("input", render));
+render();
+</script>
+</body>
+</html>
