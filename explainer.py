@@ -14,8 +14,8 @@ SCHEMA_KEYS = ["mode", "recommended_strategy", "headline", "tradeoffs",
 def _mock_explain(ev):
     rec = next(r for r in ev["strategies"] if r["id"] == ev["recommendation"])
     cheapest = min(ev["strategies"], key=lambda r: r["money_total"])
-    fastest = min(ev["strategies"], key=lambda r: r["roundtrip_hours"])
-    tradeoffs = [f'{r["id"]} {r["name"]}：现金 ¥{r["money_total"]:,}、往返 {r["roundtrip_hours"]} 小时、风险 {r["risk"]["level"]}——{r["blurb"]}'
+    fastest = min(ev["strategies"], key=lambda r: r["elapsed_hours"])
+    tradeoffs = [f'{r["id"]} {r["name"]}：现金 ¥{r["money_total"]:,}、往返 {r["elapsed_hours"]} 小时、风险 {r["risk"]["level"]}——{r["blurb"]}'
                  for r in ev["strategies"]]
     hidden = [
         "默认这趟中间不用车（车只服务首尾两天）——若临时需要用车，S3/S6 的灵活性损失要另计",
@@ -25,8 +25,8 @@ def _mock_explain(ev):
     return {
         "mode": "mock",
         "recommended_strategy": rec["id"],
-        "headline": f'推荐 {rec["id"]} {rec["name"]}：现金 ¥{rec["money_total"]:,}、往返 {rec["roundtrip_hours"]} 小时；'
-                    f'现金最低是 {cheapest["id"]}（¥{cheapest["money_total"]:,}），最快是 {fastest["id"]}（往返 {fastest["roundtrip_hours"]} 小时）',
+        "headline": f'推荐 {rec["id"]} {rec["name"]}：现金 ¥{rec["money_total"]:,}、往返 {rec["elapsed_hours"]} 小时；'
+                    f'现金最低是 {cheapest["id"]}（¥{cheapest["money_total"]:,}），最快是 {fastest["id"]}（往返 {fastest["elapsed_hours"]} 小时）',
         "tradeoffs": tradeoffs,
         "hidden_assumptions": hidden,
         "sensitivity": ev["sensitivity"]["note"],
@@ -49,7 +49,7 @@ def _nemotron_explain(ev):
     req = urllib.request.Request(
         "https://api.tokenfactory.nebius.com/v1/chat/completions",
         data=body, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=180) as resp:
         data = json.load(resp)
     out = json.loads(data["choices"][0]["message"]["content"])
     out["mode"] = "nemotron"
