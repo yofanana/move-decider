@@ -33,7 +33,7 @@
 <div class="wrap">
   <h1>Move Decider · 日本移动决策引擎</h1>
   <div class="sub">为住在地方、自费移动的人算总账：现金 ＋ 时间×你的单价 ＋ 舒适/便利/风险 − 开车的享受值。<br>
-  理论：一般化费用 × 随机效用（McFadden）× 旅行的正效用（Mokhtarian &amp; Salomon）。价格 verified＝真实账单，estimate＝待复核估算（见各案例未知项）。解释层为 MOCK，接 Nemotron 后文本替换、数字不变。</div>
+  理论：一般化费用 × 随机效用（McFadden）× 旅行的正效用（Mokhtarian &amp; Salomon）。价格 verified＝真实账单，estimate＝待复核估算（见各案例未知项）。解释层已接 Nemotron（Nebius Token Factory）并实测验证（2026-10-26），本页展示与验证同口径的文本，数字由引擎确定性计算。</div>
 
   <div class="card">
     <div class="row">
@@ -72,7 +72,7 @@
     <ul id="unknowns"></ul>
   </div>
 
-  <div class="small">引擎：确定性算账（价格＋来源＋日期＋置信度）→ 风险规则 → 解释层（本页为 MOCK）。引擎/数据包分离：换走廊只换数据包，引擎不动——飞机与海外是加包，不是重写。</div>
+  <div class="small">引擎：确定性算账（价格＋来源＋日期＋置信度）→ 风险规则 → 解释层（Nemotron 实测验证，本页为静态展示）。引擎/数据包分离：换走廊只换数据包，引擎不动——飞机与海外是加包，不是重写。</div>
 </div>
 <script>
 const COEF = {drive:0.5, rest:1.0, ride:1.0};
