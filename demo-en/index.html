@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Move Decider · Japan Mobility Decision Engine (Demo v2)</title>
+<style>
+  body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;margin:0;background:#f6f7f9;color:#1c2430}
+  .wrap{max-width:920px;margin:0 auto;padding:20px 16px 48px}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:#5b6774;font-size:13px;margin-bottom:16px;line-height:1.7}
+  .card{background:#fff;border:1px solid #e2e6ec;border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  label{font-size:13px;color:#41505f}
+  input[type=range]{width:200px;vertical-align:middle}
+  .val{font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 6px;border-bottom:1px solid #edf0f3;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;white-space:normal}
+  tr.rec{background:#eef7ee}
+  .risk{font-size:12px;padding:2px 8px;border-radius:99px}
+  .green{background:#dff2df}.yellow{background:#fdf0cd}.red{background:#fbdcdc}
+  .star{color:#1a7f37;font-weight:700}
+  .headline{font-size:16px;font-weight:700;margin:0 0 6px}
+  .small{font-size:12.5px;color:#5b6774;line-height:1.7}
+  h3{font-size:14px;margin:12px 0 6px}
+  ul{margin:6px 0;padding-left:18px}
+  li{font-size:13px;line-height:1.7;color:#33404d}
+  .flip{color:#b3540e;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Move Decider · Japan Mobility Decision Engine</h1>
+  <div class="sub">Total-cost accounting for people who live in the countryside and travel on their own money: cash + time × your rate + comfort / convenience / risk − the joy of driving.<br>
+  Theory: generalized cost × random utility (McFadden) × the positive utility of travel (Mokhtarian &amp; Salomon). Prices marked verified come from real bills; estimates are pending recheck (see each case's unknowns). The explanation layer runs on Nemotron (Nebius Token Factory), validated live (2026-10-26); this page shows text in the same form as validated, while every number is computed deterministically by the engine.</div>
+
+  <div class="card">
+    <div class="row">
+      <label>Case:
+        <select id="caseSel">
+          <option value="tokyo" selected>Yuzawa ⇄ Tokyo · November work week (5 nights)</option>
+          <option value="snow">Yuzawa ⇄ Tokyo · Snow-season variant (January)</option>
+          <option value="maebashi">Yuzawa ⇄ Maebashi · Exam-day round trip (Nov 15)</option>
+        </select></label>
+      <label>Priority:
+        <select id="prio">
+          <option value="balanced" selected>Balanced (cash + time)</option>
+          <option value="money">Lowest cash</option>
+        </select></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>My time value: <span class="val" id="tvVal">¥3,000</span>/hour
+        <input type="range" id="tv" min="0" max="5000" step="100" value="3000"></label>
+      <label>Joy of driving: <span class="val" id="ejVal">¥0</span>/trip
+        <input type="range" id="ej" min="0" max="15000" step="250" value="0"></label>
+    </div>
+    <div class="small" style="margin-top:6px">How time is priced (my profile): driving hours count at half rate — I listen to podcasts on the road; rest and riding count at full rate. The 25-minute drive from home to Echigo-Yuzawa Station is already included in the ride-based strategies. The joy-of-driving value only offsets the all-driving strategies — drag it, and watch when the recommendation flips.</div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Strategy</th><th>Cash</th><th>Door-to-door</th><th>Time cost</th><th>Joy value</th><th>Effective total</th><th>Comfort</th><th>Convenience</th><th>Risk</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <p class="headline" id="headline"></p>
+    <div class="small" id="sens"></div>
+    <h3>Unknowns (never made up — always stated)</h3>
+    <ul id="unknowns"></ul>
+  </div>
+
+  <div class="small">Engine: deterministic accounting (price + source + date + confidence) → risk rules → explanation layer (Nemotron, live-validated; this page is a static display). Engine and data packs are separate: a new corridor means a new data pack, not a new engine — flight and international packs plug in the same way.</div>
+</div>
+<script>
+const COEF = {drive:0.5, rest:1.0, ride:1.0};
+const ACC = 25/60; // home → Echigo-Yuzawa Station, one-way drive (hours)
+const CASES = {
+tokyo: {
+  season:"autumn",
+  strategies:[
+   {id:"S1",name:"Drive all the way · expressway",money:4330+11000+3335+13990,seg:{drive:3.8,rest:0.8,ride:0},enjoy:true,comfort:"Medium",conv:"High",blurb:"The money goes to tolls"},
+   {id:"S2",name:"Drive all the way · national road",money:5300+3335+13990,seg:{drive:5.5,rest:1.5,ride:0},enjoy:true,comfort:"Medium",conv:"High",blurb:"What I actually chose for this trip"},
+   {id:"S3",name:"Shinkansen, direct",money:6470*2+13990,seg:{drive:ACC,rest:0,ride:1.7},enjoy:false,comfort:"High",conv:"Medium",blurb:"Car stays at Yuzawa Station (free parking period in November, ¥0)"},
+   {id:"S4",name:"Drive to Takasaki, then Shinkansen",money:1000*2+500*6+4900*2+13990,seg:{drive:1.7,rest:0,ride:1.2},enjoy:false,comfort:"Medium-High",conv:"Medium-High",blurb:"Only the mountain leg by car; a car waits for the return"},
+   {id:"S5",name:"National road + sleep in the car (3 hotel nights)",money:5300+3335+Math.round(13990/5*3),seg:{drive:5.5,rest:1.5,ride:0},enjoy:true,comfort:"Low",conv:"High",blurb:"Lowest cash; 2 nights sleeping in the car"},
+   {id:"S6",name:"Highway bus, round trip",money:3800*2+13990,seg:{drive:ACC,rest:0,ride:3.8},enjoy:false,comfort:"Medium",conv:"Medium-Low",blurb:"Few departures; the timetable locks you in"}
+  ],
+  risk:{S1:"yellow",S2:"yellow",S3:"green",S4:"yellow",S5:"yellow",S6:"yellow"},
+  unknowns:["Expressway tolls (¥11,000) are an estimate range (¥10,000–12,000) and do not include ETC late-night / holiday discounts — with the 30% late-night discount, S1 could drop by roughly another ¥3,000.",
+            "Shinkansen fares are standard-season published prices and do not include Ekinet Tokudane discounts (when available, S3/S4 get cheaper).",
+            "Takasaki parking (¥500/day) is an order-of-magnitude estimate; legal car-sleeping spots in Yokohama are unverified (affects S5).",
+            "Luggage delivery (about ¥4,500 round trip) is an optional add-on, not counted in S3/S6. In-city transport and food are excluded (roughly equal across strategies)."],
+  userPick:"S2"
+},
+snow: null, // derived from tokyo at runtime (season=winter, risks flipped)
+maebashi: {
+  season:"autumn",
+  strategies:[
+   {id:"M1",name:"Drive all the way · expressway (Kan-Etsu)",money:2270+4000+1000,seg:{drive:1.6,rest:0,ride:0},enjoy:true,comfort:"Medium",conv:"High",blurb:"Most predictable door-to-door; no timetable to depend on"},
+   {id:"M2",name:"Drive all the way · Route 17 (Mikuni Pass)",money:2360+1000,seg:{drive:2.6,rest:0.2,ride:0},enjoy:true,comfort:"Medium-Low",conv:"High",blurb:"Lowest cash, but the pass carries early-snow / ice risk in mid-November"},
+   {id:"M3",name:"Shinkansen + Ryomo Line",money:3500*2+240*2,seg:{drive:ACC,rest:0,ride:1.2},enjoy:false,comfort:"High",conv:"Medium",blurb:"Save your energy for the exam; the Maebashi Station-to-venue leg is counted separately"},
+   {id:"M4",name:"Drive to Takasaki + Ryomo Line",money:1000*2+500+240*2,seg:{drive:1.7,rest:0,ride:0.5},enjoy:false,comfort:"Medium-High",conv:"Medium-High",blurb:"Drive the mountain leg yourself; ride the flat part"}
+  ],
+  risk:{M1:"green",M2:"yellow",M3:"green",M4:"yellow"},
+  unknowns:["Every price in the Maebashi pack is an estimate: each item is to be rechecked once the exam venue (the Nov 15 rental-housing qualification exam) is fixed.",
+            "Connections and parking around Maebashi Station / the venue are unverified; check official road information for Mikuni Pass conditions before departing on the day."],
+  userPick:null
+}};
+CASES.snow = JSON.parse(JSON.stringify(CASES.tokyo));
+CASES.snow.season = "winter";
+CASES.snow.risk = {S1:"yellow",S2:"red",S3:"green",S4:"yellow",S5:"red",S6:"yellow"};
+CASES.snow.unknowns = ["Snow season: national-road driving (S2) and sleeping in the car (S5) are judged veto-level risk — snow on Mikuni Pass plus fatigue — and are excluded from the recommendation pool."].concat(CASES.tokyo.unknowns);
+
+const fmt = n => "¥" + Math.round(n).toLocaleString("ja-JP");
+function render(){
+  const c = CASES[document.getElementById("caseSel").value];
+  const tv = +document.getElementById("tv").value;
+  const ej = +document.getElementById("ej").value;
+  const prio = document.getElementById("prio").value;
+  document.getElementById("tvVal").textContent = fmt(tv);
+  document.getElementById("ejVal").textContent = fmt(ej);
+  const rows = c.strategies.map(s=>{
+    const rt = {drive:s.seg.drive*2, rest:s.seg.rest*2, ride:s.seg.ride*2};
+    const elapsed = rt.drive+rt.rest+rt.ride;
+    const equiv = rt.drive*COEF.drive + rt.rest*COEF.rest + rt.ride*COEF.ride;
+    const tc = equiv*tv;
+    const credit = s.enjoy ? ej : 0;
+    return {...s, elapsed, tc, credit, eff: s.money+tc-credit, risk: c.risk[s.id]};
+  });
+  const pool = rows.filter(r=>r.risk!=="red");
+  const rec = prio==="money" ? pool.reduce((a,b)=>a.money<b.money?a:b) : pool.reduce((a,b)=>a.eff<b.eff?a:b);
+  document.getElementById("tbody").innerHTML = rows.map(r=>
+    `<tr class="${r.id===rec.id?"rec":""}"><td>${r.id} ${r.name} ${r.id===rec.id?'<span class="star">★ Recommended</span>':""}<br><span class="small">${r.blurb}</span></td>`+
+    `<td>${fmt(r.money)}</td><td>${r.elapsed.toFixed(1)}h</td><td>${fmt(r.tc)}</td><td>${r.credit?"-"+fmt(r.credit):"—"}</td>`+
+    `<td><b>${fmt(r.eff)}</b></td><td>${r.comfort}</td><td>${r.conv}</td>`+
+    `<td><span class="risk ${r.risk}">${r.risk}</span></td></tr>`).join("");
+  document.getElementById("headline").textContent =
+    `Recommended ${rec.id} ${rec.name}: cash ${fmt(rec.money)}, door-to-door round trip ${rec.elapsed.toFixed(1)} hours, effective total ${fmt(rec.eff)}.`;
+  let sens = "";
+  if(c.userPick){
+    const pick = rows.find(r=>r.id===c.userPick);
+    const pickNoEnjoy = pick.money + pick.tc;
+    const gap = pickNoEnjoy - rec.eff - (rec.credit||0);
+    if(rec.id===c.userPick){
+      sens = `<span class="flip">The recommendation has flipped to your actual choice ${pick.id}</span>: at the current joy value, driving wins on your own ledger — the model agrees.`;
+    } else {
+      sens = `You actually chose ${pick.id}; the gap between it and the recommendation is ${fmt(pickNoEnjoy - (rec.money+rec.tc-rec.credit))}. Drag the joy of driving past that gap and the recommendation flips to a driving strategy — the model never argued with your choice; it just put a price on it.`;
+    }
+    const s1 = rows[0], s2 = rows[1];
+    const be = Math.round((s1.money - s2.money) / ((s2.tc - s1.tc) / (tv||1)));
+    if(tv>0) sens += `<br>Comparing just S1 and S2: once your time is worth more than ${fmt(be)}/hour, the expressway pays off — the break-even sits almost exactly on your ¥3,000 screening line.`;
+  } else {
+    sens = "Maebashi pack: the cash gap between the four options is small — the real contest is time and exam-day risk. M2 is the cheapest in cash, but exam day allows no mistakes; the risk column is its price.";
+  }
+  document.getElementById("sens").innerHTML = sens;
+  document.getElementById("unknowns").innerHTML = c.unknowns.map(u=>`<li>${u}</li>`).join("");
+}
+["caseSel","tv","ej","prio"].forEach(id=>document.getElementById(id).addEventListener("input", render));
+render();
+</script>
+</body>
+</html>
