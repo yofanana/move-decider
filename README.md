@@ -1,3 +1,17 @@
+## Move Decider — Japan Mobility Decision Engine
+
+Move Decider compares every realistic strategy for a trip in Japan and prices each one four ways: cash, door-to-door time converted at *your* personal value of time, comfort/convenience, and seasonal risk — then recommends one, and shows the break-even points where the answer flips.
+
+- **Live demo (English):** https://yofanana.github.io/move-decider/demo-en/
+- **Demo video (2:55):** https://www.youtube.com/watch?v=gmk6yeWhJ3g
+- **Devpost:** https://devpost.com/software/move-decider-japan-mobility-decision-engine
+
+**How it works:** a deterministic costing engine (Python) computes every number from a price pack in which each price carries a source, a date, and a confidence label. The explanation layer calls **NVIDIA Nemotron on Nebius Token Factory** (OpenAI-compatible endpoint) and may only explain the engine's computed table — it is architecturally forbidden from inventing numbers; estimates stay labelled and unknowns are listed, never smoothed over. The integration was validated live on 2026-10-26.
+
+Run it: `python3 engine.py cases/tokyo_nov.json` prints the strategy table; `python3 explainer.py cases/tokyo_nov.json` runs the explanation layer (set `NEBIUS_API_KEY` for live Nemotron output).
+
+*(Full documentation in Chinese below.)*
+
 # Move Decider（移动决策引擎 · 上京包）
 
 日本国内移动的决策模型：输入个人档案＋一趟行程，枚举出行策略，用确定性规则算清每条策略的现金、时间与风险总账，再由解释层给出推荐与取舍说明。未知项明示，估算不冒充实价。
